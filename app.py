@@ -22,10 +22,6 @@ def init_db():
 def index():
     return send_file('index.html')
 
-@app.route('/adddata', methods=['GET'])
-def add_data_form():
-    return send_file('adddata.html')
-
 @app.route('/data')
 def data():
     with sqlite3.connect(DB_FILE) as conn:
