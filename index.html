@@ -1,0 +1,274 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Student Scores</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    body {
+      margin: 0;
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background-color: #2b1a80;
+    }
+
+    header {
+      background: linear-gradient(to right, #4e54c8, #8f94fb);
+      padding: 20px;
+      color: white;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    header h1 {
+      font-size: 2rem;
+    }
+
+    .container {
+      padding: 20px;
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+      gap: 20px;
+    }
+
+    .card {
+      background: white;
+      padding: 20px;
+      border-radius: 16px;
+      box-shadow: 0 6px 18px rgba(0, 0, 0, 0.1);
+    }
+
+    .card h2 {
+      margin-bottom: 10px;
+      color: #333;
+    }
+
+    .card table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+
+    .card th, .card td {
+      text-align: left;
+      padding: 6px 10px;
+    }
+
+    .card tr:nth-child(even) {
+      background-color: #f9f9f9;
+    }
+
+    .chart-container {
+      width: 90%;
+      max-width: 800px;
+      margin: 40px auto;
+      background: white;
+      border-radius: 16px;
+      padding: 20px;
+      box-shadow: 0 6px 18px rgba(0, 0, 0, 0.08);
+    }
+
+    #addButton {
+      position: fixed;
+      bottom: 30px;
+      right: 30px;
+      background: #4e54c8;
+      color: white;
+      border: none;
+      padding: 15px 20px;
+      font-size: 16px;
+      border-radius: 50px;
+      cursor: pointer;
+    }
+
+    #formPopup {
+      display: none;
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      background: white;
+      padding: 30px;
+      border-radius: 12px;
+      box-shadow: 0 0 20px rgba(0,0,0,0.3);
+      z-index: 1000;
+    }
+
+    #formPopup input {
+      display: block;
+      margin-bottom: 10px;
+      padding: 10px;
+      width: 100%;
+    }
+
+    #formPopup button {
+      margin-top: 10px;
+      background: #4e54c8;
+      color: white;
+      border: none;
+      padding: 10px 15px;
+      cursor: pointer;
+    }
+
+    #overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.5);
+      z-index: 999;
+    }
+  </style>
+</head>
+<body>
+
+  <header>
+    <h1>📊 Student Scores</h1>
+  </header>
+
+  <div class="container" id="students-container"></div>
+
+  <div class="chart-container">
+    <canvas id="scoreChart"></canvas>
+  </div>
+
+  <button id="addButton">➕ Add Student</button>
+
+  <div id="overlay"></div>
+  <div id="formPopup">
+    <h3>Add Student</h3>
+    <input type="text" id="nameInput" placeholder="Name" required>
+    <input type="number" id="mathInput" placeholder="Math Score">
+    <input type="number" id="englishInput" placeholder="English Score">
+    <input type="number" id="scienceInput" placeholder="Science Score">
+    <button onclick="submitStudent()">Submit</button>
+  </div>
+
+  <script>
+    const container = document.getElementById('students-container');
+    const overlay = document.getElementById('overlay');
+    const popup = document.getElementById('formPopup');
+    let chart;
+
+    function openForm() {
+      overlay.style.display = 'block';
+      popup.style.display = 'block';
+    }
+
+    function closeForm() {
+      overlay.style.display = 'none';
+      popup.style.display = 'none';
+    }
+
+    document.getElementById('addButton').addEventListener('click', openForm);
+    overlay.addEventListener('click', closeForm);
+
+    async function fetchAndRender() {
+      const response = await fetch('/data');
+      const data = await response.json();
+      container.innerHTML = '';
+
+      const studentNames = [];
+      const totalScores = [];
+
+      data.forEach((student, index) => {
+        const card = document.createElement('div');
+        card.className = 'card';
+        card.id = `card-${index}`;
+
+        let tableRows = '';
+        let total = 0;
+
+        for (const subject in student.scores) {
+          const score = parseInt(student.scores[subject]);
+          total += score;
+          tableRows += `<tr><th>${subject}</th><td>${score}</td></tr>`;
+        }
+
+        card.innerHTML = `
+          <h2>${student.name}</h2>
+          <table>${tableRows}</table>
+          <button onclick="printCard('card-${index}')">🖨️ Print Scorecard</button>
+        `;
+        container.appendChild(card);
+        studentNames.push(student.name);
+        totalScores.push(total);
+      });
+
+      if (chart) chart.destroy();
+      const ctx = document.getElementById('scoreChart').getContext('2d');
+      chart = new Chart(ctx, {
+        type: 'bar',
+        data: {
+          labels: studentNames,
+          datasets: [{
+            label: 'Total Score',
+            data: totalScores,
+            backgroundColor: '#4e54c8'
+          }]
+        },
+        options: {
+          responsive: true,
+          plugins: {
+            legend: { display: false },
+            title: {
+              display: true,
+              text: 'Total Scores of Students',
+              font: { size: 20 }
+            }
+          }
+        }
+      });
+    }
+
+    async function submitStudent() {
+      const name = document.getElementById('nameInput').value.trim();
+      const scores = {
+        Math: parseInt(document.getElementById('mathInput').value),
+        English: parseInt(document.getElementById('englishInput').value),
+        Science: parseInt(document.getElementById('scienceInput').value)
+      };
+
+      if (!name) return alert("Name is required!");
+
+      const cleanedScores = {};
+      for (let key in scores) {
+        if (!isNaN(scores[key])) cleanedScores[key] = scores[key];
+      }
+
+      await fetch('/submitdata', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ name, scores: cleanedScores })
+      });
+
+      closeForm();
+      fetchAndRender();
+    }
+
+    function printCard(cardId) {
+      const card = document.getElementById(cardId);
+      const printWindow = window.open('', '', 'width=800,height=600');
+      printWindow.document.write(`
+        <html>
+          <head>
+            <title>Print Scorecard</title>
+            <style>
+              body { font-family: 'Segoe UI', sans-serif; padding: 20px; background: white; }
+              h2 { color: #4e54c8; }
+              table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+              th, td { border: 1px solid #ccc; padding: 8px 12px; text-align: left; }
+              th { background-color: #4e54c9; }
+            </style>
+          </head>
+          <body>${card.innerHTML.replace(/<button.*<\/button>/, '')}</body>
+        </html>
+      `);
+      printWindow.document.close();
+      printWindow.print();
+    }
+
+    // Initial load
+    fetchAndRender();
+  </script>
+</body>
+</html>
