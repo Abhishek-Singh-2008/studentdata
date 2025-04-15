@@ -1,13 +1,19 @@
-from flask import Flask, request, jsonify, send_file, redirect
-import sqlite3
 import os
+import sqlite3
+from flask import Flask, request, jsonify, send_file
 
 app = Flask(__name__)
 
-DB_FILE = 'students.db'
+# Use /tmp folder on Render, local directory otherwise
+if os.environ.get('RENDER'):
+    DB_FILE = os.path.join('/tmp', 'students.db')
+else:
+    DB_FILE = 'students.db'
 
-# Initialize DB
 def init_db():
+    # Ensure the folder exists (usually not needed for root, but just in case)
+    os.makedirs(os.path.dirname(DB_FILE), exist_ok=True) if os.path.dirname(DB_FILE) else None
+
     with sqlite3.connect(DB_FILE) as conn:
         conn.execute('''
             CREATE TABLE IF NOT EXISTS students (
@@ -15,43 +21,42 @@ def init_db():
                 name TEXT NOT NULL,
                 subject TEXT NOT NULL,
                 score INTEGER NOT NULL
-            );
+            )
         ''')
 
 @app.route('/')
 def index():
     return send_file('index.html')
 
-@app.route('/data')
-def data():
-    with sqlite3.connect(DB_FILE) as conn:
-        cur = conn.cursor()
-        cur.execute('SELECT name, subject, score FROM students')
-        rows = cur.fetchall()
- 
-    student_dict = {}
-    for name, subject, score in rows:
-        if name not in student_dict:
-            student_dict[name] = {}
-        student_dict[name][subject] = score
-
-    students = [{'name': name, 'scores': scores} for name, scores in student_dict.items()]
-    return jsonify(students)
-
-@app.route('/submitdata', methods=['POST'])
-def submit_data():
+@app.route('/add', methods=['POST'])
+def add_data():
     data = request.json
     name = data.get('name')
-    scores = data.get('scores', {})
+    subject = data.get('subject')
+    score = data.get('score')
+
+    if not name or not subject or not score:
+        return jsonify({'error': 'Missing fields'}), 400
 
     with sqlite3.connect(DB_FILE) as conn:
-        for subject, score in scores.items():
-            if isinstance(score, int):
-                conn.execute(
-                    'INSERT INTO students (name, subject, score) VALUES (?, ?, ?)',
-                    (name, subject, score)
-                )
-    return jsonify({"message": "Data added successfully"})
+        conn.execute('INSERT INTO students (name, subject, score) VALUES (?, ?, ?)', (name, subject, score))
+        conn.commit()
+    return jsonify({'status': 'success'})
+
+@app.route('/data')
+def get_data():
+    with sqlite3.connect(DB_FILE) as conn:
+        cursor = conn.execute('SELECT name, subject, score FROM students')
+        rows = cursor.fetchall()
+
+    students = {}
+    for name, subject, score in rows:
+        if name not in students:
+            students[name] = {}
+        students[name][subject] = score
+
+    result = [{'name': name, 'scores': scores} for name, scores in students.items()]
+    return jsonify(result)
 
 if __name__ == '__main__':
     init_db()
